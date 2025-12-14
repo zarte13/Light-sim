@@ -5,8 +5,8 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from app.optics.analysis import RayLine, estimate_focus, intensity_profile_at_x
-from app.optics.elements import ConicMirror, FresnelThinLens
+from app.optics.analysis import RayLine, best_focus_scan, estimate_focus, intensity_profile_at_x
+from app.optics.elements import ConicMirror, FresnelFacetLens, FresnelThinLens
 from app.optics.schema import Scene
 from app.optics.transform import Pose2
 from app.optics.vec2 import Vec2
@@ -17,15 +17,28 @@ def _vec(v) -> Vec2:
 
 
 def simulate_scene(scene: Scene) -> Dict:
-    lenses = [
-        FresnelThinLens(
-            id=l.id,
-            pose=Pose2(pos=_vec(l.pos), theta=float(l.theta)),
-            f=float(l.f),
-            aperture=float(l.aperture),
-        )
-        for l in scene.lenses
-    ]
+    lenses = []
+    for l in scene.lenses:
+        if l.type == "fresnel_facet":
+            lenses.append(
+                FresnelFacetLens(
+                    id=l.id,
+                    pose=Pose2(pos=_vec(l.pos), theta=float(l.theta)),
+                    f=float(l.f),
+                    aperture=float(l.aperture),
+                    n1=float(l.n1),
+                    n2=float(l.n2),
+                )
+            )
+        else:
+            lenses.append(
+                FresnelThinLens(
+                    id=l.id,
+                    pose=Pose2(pos=_vec(l.pos), theta=float(l.theta)),
+                    f=float(l.f),
+                    aperture=float(l.aperture),
+                )
+            )
     mirrors = [
         ConicMirror(
             id=m.id,
@@ -48,24 +61,60 @@ def simulate_scene(scene: Scene) -> Dict:
     for s in scene.sources:
         if s.ray_count <= 0:
             continue
-        origin = _vec(s.pos)
+
         n = int(s.ray_count)
-        for i in range(n):
-            ang = (2.0 * math.pi) * (i / n)
-            if angular_jitter > 0:
-                ang += float(rng.uniform(-angular_jitter, angular_jitter))
-            rd = Vec2(math.cos(ang), math.sin(ang)).normalized()
-            poly = _trace_one(origin, rd, lenses, mirrors, max_bounces, max_dist)
-            rays_out.append({"points": [[p.x, p.y] for p in poly]})
+        src_pos = _vec(s.pos)
 
-            if len(poly) >= 2:
-                p0 = poly[-2]
-                p1 = poly[-1]
-                d = (p1 - p0).normalized()
-                if d.norm() > 0:
-                    outgoing_lines.append(RayLine(p0=p0, d=d))
+        if s.type == "collimated":
+            base = float(s.theta)
+            d0 = Vec2(math.cos(base), math.sin(base)).normalized()
+            u = d0.perp().normalized()
+            w = float(s.width)
+            denom = max(1, n - 1)
+            for i in range(n):
+                off = (-0.5 * w) + (w * (i / denom))
+                origin = src_pos + u * off
+                ang = base
+                if angular_jitter > 0:
+                    ang += float(rng.uniform(-angular_jitter, angular_jitter))
+                rd = Vec2(math.cos(ang), math.sin(ang)).normalized()
+                poly = _trace_one(origin, rd, lenses, mirrors, max_bounces, max_dist)
+                rays_out.append({"points": [[p.x, p.y] for p in poly]})
+                if len(poly) >= 2:
+                    p0 = poly[-2]
+                    p1 = poly[-1]
+                    d = (p1 - p0).normalized()
+                    if d.norm() > 0:
+                        outgoing_lines.append(RayLine(p0=p0, d=d))
+        else:
+            origin = src_pos
+            for i in range(n):
+                ang = (2.0 * math.pi) * (i / n)
+                if angular_jitter > 0:
+                    ang += float(rng.uniform(-angular_jitter, angular_jitter))
+                rd = Vec2(math.cos(ang), math.sin(ang)).normalized()
+                poly = _trace_one(origin, rd, lenses, mirrors, max_bounces, max_dist)
+                rays_out.append({"points": [[p.x, p.y] for p in poly]})
 
-    focus = estimate_focus(outgoing_lines)
+                if len(poly) >= 2:
+                    p0 = poly[-2]
+                    p1 = poly[-1]
+                    d = (p1 - p0).normalized()
+                    if d.norm() > 0:
+                        outgoing_lines.append(RayLine(p0=p0, d=d))
+
+    focus = None
+    if outgoing_lines:
+        dx_mean = float(np.mean([ln.d.x for ln in outgoing_lines]))
+        if dx_mean >= 0:
+            x_min = min(ln.p0.x for ln in outgoing_lines)
+            x_max = x_min + max_dist
+        else:
+            x_max = max(ln.p0.x for ln in outgoing_lines)
+            x_min = x_max - max_dist
+        focus = best_focus_scan(outgoing_lines, x_min=x_min, x_max=x_max, steps=240)
+    if focus is None:
+        focus = estimate_focus(outgoing_lines)
     if focus is None:
         analysis = {
             "focus": None,
@@ -89,7 +138,7 @@ def simulate_scene(scene: Scene) -> Dict:
 def _trace_one(
     ro: Vec2,
     rd: Vec2,
-    lenses: List[FresnelThinLens],
+    lenses: List[object],
     mirrors: List[ConicMirror],
     max_bounces: int,
     max_dist: float,
@@ -105,7 +154,7 @@ def _trace_one(
             h = ln.intersect(o, d)
             if h is None:
                 continue
-            if hit_best is None or h.t < hit_best.t:
+            if hit_best is None or h.t < hit_best[2].t:
                 hit_best = ("lens", ln, h)
 
         for mr in mirrors:
@@ -122,13 +171,14 @@ def _trace_one(
         kind, elem, h = hit_best
         pts.append(h.p_world)
 
-        # Offset origin to avoid self-intersection.
-        o = h.p_world + d * 1e-6
-
         if kind == "lens":
-            d = elem.transmit(h.p_world, d)
+            d2 = elem.transmit(h.p_world, d)
         else:
-            d = elem.reflect(d, h.n_world)
+            d2 = elem.reflect(d, h.n_world)
+
+        # Offset origin to avoid self-intersection (along the *new* direction).
+        d = d2
+        o = h.p_world + d * 1e-6
 
     return pts
 

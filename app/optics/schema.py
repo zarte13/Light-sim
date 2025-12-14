@@ -12,19 +12,25 @@ class Vec2Model(BaseModel):
 
 class SourceModel(BaseModel):
     id: str
-    type: Literal["point"] = "point"
+    type: Literal["point", "collimated"] = "point"
     pos: Vec2Model
     power: float = 1.0
     ray_count: int = Field(default=2000, ge=10, le=20000)
+    # For collimated sources
+    theta: float = Field(default=0.0, description="Direction angle (radians) for collimated sources.")
+    width: float = Field(default=0.5, gt=0.0, description="Full beam width (m) for collimated sources.")
 
 
 class FresnelLensModel(BaseModel):
     id: str
-    type: Literal["fresnel_thin"] = "fresnel_thin"
+    type: Literal["fresnel_thin", "fresnel_facet"] = "fresnel_thin"
     pos: Vec2Model
     theta: float = 0.0
     f: float = Field(..., gt=0.0, description="Focal length (m)")
     aperture: float = Field(default=0.2, gt=0.0, description="Full aperture height (m)")
+    # Only used by Snell/facet model
+    n1: float = Field(default=1.0, gt=0.0, description="Refractive index on incident side")
+    n2: float = Field(default=1.49, gt=0.0, description="Refractive index inside/exit side")
 
 
 class ConicMirrorModel(BaseModel):

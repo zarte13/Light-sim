@@ -12,6 +12,7 @@
         <div class="group">
           <button id="toolSelect" data-tool="select">Select/Move</button>
           <button id="toolSource" data-tool="add_source">Add Source</button>
+          <button id="toolCollimated" data-tool="add_collimated">Add Collimated</button>
           <button id="addLens">Add Fresnel</button>
           <button id="addMirror">Add Conic Mirror</button>
         </div>
@@ -48,10 +49,32 @@
             <label class="field">y <input id="posY" type="number" step="0.001" /></label>
             <label class="field">theta <input id="theta" type="number" step="0.01" /></label>
 
+            <div id="paramsSource" style="display:none;">
+              <h4>Source</h4>
+              <label class="field">
+                kind
+                <select id="srcKind">
+                  <option value="point">point</option>
+                  <option value="collimated">collimated</option>
+                </select>
+              </label>
+              <label class="field">width (m) <input id="srcWidth" type="number" step="0.001" min="0.001" /></label>
+              <div class="muted">For collimated sources: use theta as the beam direction.</div>
+            </div>
+
             <div id="paramsLens" style="display:none;">
               <h4>Fresnel (thin)</h4>
+              <label class="field">
+                model
+                <select id="lensKind">
+                  <option value="fresnel_thin">thin (paraxial)</option>
+                  <option value="fresnel_facet">facet (Snell)</option>
+                </select>
+              </label>
               <label class="field">f (m) <input id="lensF" type="number" step="0.001" min="0.001" /></label>
               <label class="field">aperture (m) <input id="lensA" type="number" step="0.001" min="0.001" /></label>
+              <label class="field">n1 <input id="lensN1" type="number" step="0.01" min="0.1" /></label>
+              <label class="field">n2 <input id="lensN2" type="number" step="0.01" min="0.1" /></label>
             </div>
             <div id="paramsMirror" style="display:none;">
               <h4>Conic mirror</h4>

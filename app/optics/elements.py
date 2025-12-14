@@ -8,6 +8,27 @@ from app.optics.transform import Pose2
 from app.optics.vec2 import Vec2
 
 
+def refract_dir(d_in: Vec2, n: Vec2, n1: float, n2: float) -> Optional[Vec2]:
+    """Refract direction vector across an interface using Snell's law (vector form).
+
+    `d_in` and `n` must be normalized.
+    `n` points from medium 1 toward medium 2.
+
+    Returns None on total internal reflection.
+    """
+
+    d = d_in.normalized()
+    nn = n.normalized()
+    eta = float(n1) / float(n2)
+    cos1 = -nn.dot(d)
+    k = 1.0 - eta * eta * (1.0 - cos1 * cos1)
+    if k < 0.0:
+        return None
+    cos2 = math.sqrt(max(0.0, k))
+    t = (d * eta) + (nn * (eta * cos1 - cos2))
+    return t.normalized()
+
+
 @dataclass(frozen=True)
 class Hit:
     t: float
@@ -52,6 +73,64 @@ class FresnelThinLens:
         m = d_l.y / dx
         m2 = m - (p_l.y / self.f)
         d2_l = Vec2(sgn, m2).normalized()
+        return self.pose.dir_local_to_world(d2_l).normalized()
+
+
+@dataclass(frozen=True)
+class FresnelFacetLens:
+    """Idealized Fresnel lens using a Snell-law direction change at an infinitely thin interface.
+
+    This is not a full geometric facet model (no thickness / no second surface).
+    It picks a local normal so that, for on-axis collimated light, rays at height `y`
+    are redirected toward the focal point `(f, 0)` in lens-local coordinates.
+    """
+
+    id: str
+    pose: Pose2
+    f: float
+    aperture: float  # full height
+    n1: float = 1.0
+    n2: float = 1.49
+
+    def intersect(self, ro: Vec2, rd: Vec2) -> Optional[Hit]:
+        # Lens plane is x=0 in local coordinates.
+        ro_l = self.pose.world_to_local(ro)
+        rd_l = self.pose.dir_world_to_local(rd)
+        if abs(rd_l.x) < 1e-12:
+            return None
+        t = -ro_l.x / rd_l.x
+        if t <= 1e-9:
+            return None
+        p_l = Vec2(ro_l.x + t * rd_l.x, ro_l.y + t * rd_l.y)
+        if abs(p_l.y) > self.aperture / 2:
+            return None
+        p_w = self.pose.local_to_world(p_l)
+        # Normal is height-dependent; returned normal is a placeholder.
+        n_w = self.pose.dir_local_to_world(Vec2(1.0, 0.0)).normalized()
+        return Hit(t=t, p_world=p_w, n_world=n_w, element_id=self.id, element_type="lens")
+
+    def transmit(self, p_world: Vec2, rd_world: Vec2) -> Vec2:
+        p_l = self.pose.world_to_local(p_world)
+        d_l = self.pose.dir_world_to_local(rd_world).normalized()
+
+        # Preserve propagation direction sign across lens.
+        sgn = 1.0 if d_l.x >= 0 else -1.0
+
+        # Desired outgoing direction: toward focal point in local coords.
+        target = Vec2(sgn * self.f, -p_l.y).normalized()
+
+        # Choose a local interface normal that satisfies Snell tangential constraint:
+        # (n1 * d_in - n2 * d_out) is parallel to the surface normal.
+        n_l = (d_l * float(self.n1) - target * float(self.n2)).normalized()
+        if n_l.norm() == 0:
+            return self.pose.dir_local_to_world(target).normalized()
+        if d_l.dot(n_l) > 0:
+            n_l = n_l * -1.0
+
+        d2_l = refract_dir(d_l, n_l, self.n1, self.n2)
+        if d2_l is None:
+            # Total internal reflection fallback.
+            d2_l = (d_l - n_l * (2.0 * d_l.dot(n_l))).normalized()
         return self.pose.dir_local_to_world(d2_l).normalized()
 
 

@@ -110,6 +110,7 @@ bindRangeNumber(
 
 document.getElementById('toolSelect').onclick = () => (tool = 'select');
 document.getElementById('toolSource').onclick = () => (tool = 'add_source');
+document.getElementById('toolCollimated').onclick = () => (tool = 'add_collimated');
 
 document.getElementById('addLens').onclick = () => {
   const id = uid('lens');
@@ -120,6 +121,8 @@ document.getElementById('addLens').onclick = () => {
     theta: 0,
     f: 0.3,
     aperture: 0.25,
+    n1: 1.0,
+    n2: 1.49,
   });
   select({ type: 'lens', id });
   draw();
@@ -194,6 +197,7 @@ function select(sel) {
 function refreshSelectionUI() {
   const none = document.getElementById('selNone');
   const panel = document.getElementById('panel');
+  const paramsSource = document.getElementById('paramsSource');
   const paramsLens = document.getElementById('paramsLens');
   const paramsMirror = document.getElementById('paramsMirror');
   const obj = findSelected();
@@ -212,12 +216,24 @@ function refreshSelectionUI() {
   document.getElementById('posY').value = obj.pos.y;
   document.getElementById('theta').value = obj.theta ?? 0;
 
+  paramsSource.style.display = selected.type === 'source' ? 'block' : 'none';
   paramsLens.style.display = selected.type === 'lens' ? 'block' : 'none';
   paramsMirror.style.display = selected.type === 'mirror' ? 'block' : 'none';
 
+  if (selected.type === 'source') {
+    document.getElementById('srcKind').value = obj.type ?? 'point';
+    document.getElementById('srcWidth').value = obj.width ?? 0.5;
+    document.getElementById('srcWidth').parentElement.style.display = obj.type === 'collimated' ? 'flex' : 'none';
+  }
   if (selected.type === 'lens') {
+    document.getElementById('lensKind').value = obj.type;
     document.getElementById('lensF').value = obj.f;
     document.getElementById('lensA').value = obj.aperture;
+    document.getElementById('lensN1').value = obj.n1 ?? 1.0;
+    document.getElementById('lensN2').value = obj.n2 ?? 1.49;
+    const showN = obj.type === 'fresnel_facet';
+    document.getElementById('lensN1').parentElement.style.display = showN ? 'flex' : 'none';
+    document.getElementById('lensN2').parentElement.style.display = showN ? 'flex' : 'none';
   }
   if (selected.type === 'mirror') {
     document.getElementById('mirR').value = obj.R;
@@ -235,11 +251,34 @@ function hookField(id, setter) {
   });
 }
 
+function hookSelect(id, setter) {
+  document.getElementById(id).addEventListener('change', (ev) => {
+    const obj = findSelected();
+    if (!obj) return;
+    setter(obj, ev.target.value);
+    refreshSelectionUI();
+    draw();
+  });
+}
+
 hookField('posX', (o, v) => (o.pos.x = v));
 hookField('posY', (o, v) => (o.pos.y = v));
 hookField('theta', (o, v) => (o.theta = v));
+
+hookSelect('srcKind', (o, v) => {
+  o.type = v;
+  if (v === 'collimated') {
+    if (o.width == null) o.width = 0.5;
+    if (o.theta == null) o.theta = 0;
+  }
+});
+hookField('srcWidth', (o, v) => (o.width = v));
+
+hookSelect('lensKind', (o, v) => (o.type = v));
 hookField('lensF', (o, v) => (o.f = v));
 hookField('lensA', (o, v) => (o.aperture = v));
+hookField('lensN1', (o, v) => (o.n1 = v));
+hookField('lensN2', (o, v) => (o.n2 = v));
 hookField('mirR', (o, v) => (o.R = v));
 hookField('mirK', (o, v) => (o.kappa = v));
 hookField('mirA', (o, v) => (o.aperture = v));
@@ -294,6 +333,24 @@ canvas.addEventListener('mousedown', (ev) => {
     const id = uid('src');
     const rc = Number(document.getElementById('rayCountNum').value);
     scene.sources.push({ id, type: 'point', pos: { x: w.x, y: w.y }, power: 1.0, ray_count: rc });
+    select({ type: 'source', id });
+    tool = 'select';
+    draw();
+    return;
+  }
+
+  if (tool === 'add_collimated') {
+    const id = uid('src');
+    const rc = Number(document.getElementById('rayCountNum').value);
+    scene.sources.push({
+      id,
+      type: 'collimated',
+      pos: { x: w.x, y: w.y },
+      power: 1.0,
+      ray_count: rc,
+      theta: 0,
+      width: 0.5,
+    });
     select({ type: 'source', id });
     tool = 'select';
     draw();

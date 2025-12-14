@@ -23,8 +23,12 @@ Browser (canvas editor)
 
 Scene JSON contains:
 
-* `sources[]`: point sources with `pos`, `power` (relative), `ray_count`
-* `lenses[]`: thin-lens-equivalent Fresnel with `pos`, `theta`, `f` (meters), `aperture` (meters)
+* `sources[]`:
+  * `type="point"`: point source at `pos` emitting rays in all directions
+  * `type="collimated"`: collimated beam with center `pos`, direction `theta` (radians), and full beam `width`
+* `lenses[]`: Fresnel lenses with selectable model:
+  * `type="fresnel_thin"`: paraxial thin-lens approximation (`f`, `aperture`)
+  * `type="fresnel_facet"`: idealized Snell/facet model (`f`, `aperture`, `n1`, `n2`)
 * `mirrors[]`: **conic** mirror segment with `pos`, `theta`, `R` (meters), `kappa`, `aperture` (meters)
 * `settings`: `max_bounces`, `max_distance`, `seed`
 
@@ -61,6 +65,23 @@ In lens-local coordinates with lens plane `x = 0`:
   * `m2 = m - y/f`
 
 This is the standard thin lens relation (ABCD matrices) and is accurate for small angles.
+
+### Refraction (Snell / facet Fresnel model)
+
+For the optional Snell-based Fresnel lens model, we use the **vector** refraction law.
+Given a unit incident direction `I`, a unit surface normal `n`, and refractive indices `n1 → n2`:
+
+* `cos(theta1) = -n · I`
+* `cos(theta2) = sqrt(1 - (n1/n2)^2 * (1 - cos(theta1)^2))`
+* `V = (n1/n2) I + ((n1/n2) cos(theta1) - cos(theta2)) n`
+
+If the expression under the square-root is negative, total internal reflection occurs.
+
+### Focus metric (aberrations)
+
+For conic mirrors with `kappa != -1` (or any aberrated system), rays generally do **not** intersect at a single point.
+Instead of only computing a least-squares line intersection, we also scan detector planes along `x` and pick the plane
+with minimal spot RMS (circle of least confusion in 2D).
 
 ### Intensity / concentration
 

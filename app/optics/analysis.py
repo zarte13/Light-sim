@@ -93,3 +93,47 @@ def intensity_profile_at_x(
         "samples": int(len(ys)),
     }
 
+
+def _ys_at_x(lines: Iterable[RayLine], detector_x: float) -> list[float]:
+    ys: list[float] = []
+    for ln in lines:
+        dx = ln.d.x
+        if abs(dx) < 1e-12:
+            continue
+        t = (detector_x - ln.p0.x) / dx
+        if t <= 0:
+            continue
+        ys.append(ln.p0.y + t * ln.d.y)
+    return ys
+
+
+def best_focus_scan(
+    lines: Iterable[RayLine],
+    x_min: float,
+    x_max: float,
+    steps: int = 200,
+    min_samples: int = 30,
+) -> Optional[Tuple[Vec2, float]]:
+    """Find best focus by scanning detector planes and minimizing spot RMS.
+
+    Returns (focus_point, spot_rms). This remains meaningful even with aberrations,
+    where rays do not intersect at a single point.
+    """
+
+    if steps < 2:
+        return None
+
+    best = None
+    for i in range(steps):
+        x = float(x_min + (x_max - x_min) * (i / (steps - 1)))
+        ys = _ys_at_x(lines, detector_x=x)
+        if len(ys) < min_samples:
+            continue
+        y = np.array(ys, dtype=float)
+        y_mean = float(np.mean(y))
+        rms = float(np.sqrt(np.mean(np.square(y - y_mean))))
+        if best is None or rms < best[1]:
+            best = (Vec2(x, y_mean), rms)
+
+    return best
+
