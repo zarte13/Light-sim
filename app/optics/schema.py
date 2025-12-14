@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, Field
+
+
+class Vec2Model(BaseModel):
+    x: float
+    y: float
+
+
+class SourceModel(BaseModel):
+    id: str
+    type: Literal["point"] = "point"
+    pos: Vec2Model
+    power: float = 1.0
+    ray_count: int = Field(default=2000, ge=10, le=20000)
+
+
+class FresnelLensModel(BaseModel):
+    id: str
+    type: Literal["fresnel_thin"] = "fresnel_thin"
+    pos: Vec2Model
+    theta: float = 0.0
+    f: float = Field(..., gt=0.0, description="Focal length (m)")
+    aperture: float = Field(default=0.2, gt=0.0, description="Full aperture height (m)")
+
+
+class ParabolicMirrorModel(BaseModel):
+    id: str
+    type: Literal["parabola"] = "parabola"
+    pos: Vec2Model
+    theta: float = 0.0
+    f: float = Field(..., gt=0.0, description="Focal length (m)")
+    aperture: float = Field(default=0.5, gt=0.0, description="Full aperture height (m)")
+
+
+class SettingsModel(BaseModel):
+    max_bounces: int = Field(default=6, ge=0, le=50)
+    max_distance: float = Field(default=5.0, gt=0.0)
+    angular_jitter: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=0.5,
+        description="Optional random jitter (radians) added to each emitted ray angle.",
+    )
+    seed: Optional[int] = None
+
+
+class Scene(BaseModel):
+    sources: List[SourceModel] = Field(default_factory=list)
+    lenses: List[FresnelLensModel] = Field(default_factory=list)
+    mirrors: List[ParabolicMirrorModel] = Field(default_factory=list)
+    settings: SettingsModel = Field(default_factory=SettingsModel)
+

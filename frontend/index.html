@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Light-sim 2D</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div id="root">
+      <div id="topbar">
+        <div class="group">
+          <button id="toolSelect" data-tool="select">Select/Move</button>
+          <button id="toolSource" data-tool="add_source">Add Source</button>
+          <button id="addLens">Add Fresnel</button>
+          <button id="addMirror">Add Parabolic Mirror</button>
+        </div>
+        <div class="group">
+          <button id="btnSim">Simulate</button>
+          <label class="inline">
+            Rays
+            <input id="rayCount" type="range" min="100" max="20000" step="100" value="2000" />
+            <input id="rayCountNum" type="number" min="100" max="20000" step="100" value="2000" />
+          </label>
+          <label class="inline">
+            Max bounces
+            <input id="maxBounces" type="range" min="0" max="20" step="1" value="6" />
+            <input id="maxBouncesNum" type="number" min="0" max="20" step="1" value="6" />
+          </label>
+        </div>
+        <div class="group">
+          <button id="btnExport">Export</button>
+          <input id="fileImport" type="file" accept="application/json" />
+        </div>
+      </div>
+
+      <div id="main">
+        <canvas id="canvas" width="1200" height="700"></canvas>
+        <div id="sidebar">
+          <h3>Selected</h3>
+          <div id="selNone" class="muted">None</div>
+          <div id="panel" style="display:none;">
+            <div class="row"><span class="label">Type</span><span id="selType"></span></div>
+            <div class="row"><span class="label">ID</span><span id="selId"></span></div>
+
+            <h4>Pose (m, rad)</h4>
+            <label class="field">x <input id="posX" type="number" step="0.001" /></label>
+            <label class="field">y <input id="posY" type="number" step="0.001" /></label>
+            <label class="field">theta <input id="theta" type="number" step="0.01" /></label>
+
+            <div id="paramsLens" style="display:none;">
+              <h4>Fresnel (thin)</h4>
+              <label class="field">f (m) <input id="lensF" type="number" step="0.001" min="0.001" /></label>
+              <label class="field">aperture (m) <input id="lensA" type="number" step="0.001" min="0.001" /></label>
+            </div>
+            <div id="paramsMirror" style="display:none;">
+              <h4>Parabolic mirror</h4>
+              <label class="field">f (m) <input id="mirF" type="number" step="0.001" min="0.001" /></label>
+              <label class="field">aperture (m) <input id="mirA" type="number" step="0.001" min="0.001" /></label>
+            </div>
+            <div class="group">
+              <button id="btnDelete">Delete</button>
+            </div>
+          </div>
+
+          <h3>Analysis</h3>
+          <pre id="analysis" class="mono"></pre>
+          <div class="muted">Tip: mouse wheel to zoom, right-drag to pan.</div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+
