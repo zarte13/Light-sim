@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from app.optics.analysis import RayLine, estimate_focus, intensity_profile_at_x
-from app.optics.elements import FresnelThinLens, ParabolicMirror
+from app.optics.elements import ConicMirror, FresnelThinLens
 from app.optics.schema import Scene
 from app.optics.transform import Pose2
 from app.optics.vec2 import Vec2
@@ -27,10 +27,11 @@ def simulate_scene(scene: Scene) -> Dict:
         for l in scene.lenses
     ]
     mirrors = [
-        ParabolicMirror(
+        ConicMirror(
             id=m.id,
             pose=Pose2(pos=_vec(m.pos), theta=float(m.theta)),
-            f=float(m.f),
+            R=float(m.R),
+            kappa=float(m.kappa),
             aperture=float(m.aperture),
         )
         for m in scene.mirrors
@@ -89,7 +90,7 @@ def _trace_one(
     ro: Vec2,
     rd: Vec2,
     lenses: List[FresnelThinLens],
-    mirrors: List[ParabolicMirror],
+    mirrors: List[ConicMirror],
     max_bounces: int,
     max_dist: float,
 ) -> List[Vec2]:

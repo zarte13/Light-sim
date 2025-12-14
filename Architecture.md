@@ -25,20 +25,26 @@ Scene JSON contains:
 
 * `sources[]`: point sources with `pos`, `power` (relative), `ray_count`
 * `lenses[]`: thin-lens-equivalent Fresnel with `pos`, `theta`, `f` (meters), `aperture` (meters)
-* `mirrors[]`: parabolic mirror segment with `pos`, `theta`, `f` (meters), `aperture` (meters)
+* `mirrors[]`: **conic** mirror segment with `pos`, `theta`, `R` (meters), `kappa`, `aperture` (meters)
 * `settings`: `max_bounces`, `max_distance`, `seed`
 
 ## Physics models (MVP)
 
-### Reflection (parabolic mirror)
+### Reflection (conic mirror)
 
-In mirror-local coordinates, the parabola is:
+In mirror-local coordinates, we model the mirror cross-section as the conic:
 
-* `y^2 = 4 f x` (opens in +x)
+* `F(x,y) = y^2 - 2 R x + (1 + kappa) x^2 = 0`
 
-Normal from implicit surface `F(x,y) = y^2 - 4 f x`:
+This matches the common optical sagitta form for a conic surface (with the vertex at the origin, opening toward `+x`).
+Special cases:
 
-* `∇F = (-4 f, 2 y)`
+* `kappa = -1` → parabola: `y^2 = 2 R x` (equivalent to `y^2 = 4 f x` with `R = 2 f`)
+* `kappa = 0` → sphere
+
+Normal from the implicit surface `F(x,y)`:
+
+* `∇F = (dF/dx, dF/dy) = (-2R + 2(1+kappa)x, 2y)`
 
 Reflection for unit direction `d` and unit normal `n`:
 

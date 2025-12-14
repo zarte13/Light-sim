@@ -56,24 +56,32 @@ class FresnelThinLens:
 
 
 @dataclass(frozen=True)
-class ParabolicMirror:
+class ConicMirror:
     id: str
     pose: Pose2
-    f: float
+    R: float  # radius of curvature at vertex
+    kappa: float  # conic constant
     aperture: float  # full height
 
     def intersect(self, ro: Vec2, rd: Vec2) -> Optional[Hit]:
         ro_l = self.pose.world_to_local(ro)
         rd_l = self.pose.dir_world_to_local(rd).normalized()
 
-        # Solve (y0 + t dy)^2 = 4 f (x0 + t dx)
+        # Intersect with conic section in mirror-local coordinates.
+        # Implicit surface (cross-section):
+        #   F(x, y) = y^2 - 2 R x + (1 + kappa) x^2 = 0
+        # where the usable branch opens toward +x and has its vertex at (0, 0).
         y0 = ro_l.y
         x0 = ro_l.x
         dy = rd_l.y
         dx = rd_l.x
-        A = dy * dy
-        B = 2 * y0 * dy - 4 * self.f * dx
-        C = y0 * y0 - 4 * self.f * x0
+
+        k1 = 1.0 + float(self.kappa)
+        R = float(self.R)
+
+        A = (dy * dy) + k1 * (dx * dx)
+        B = (2.0 * y0 * dy) - (2.0 * R * dx) + (2.0 * k1 * x0 * dx)
+        C = (y0 * y0) - (2.0 * R * x0) + k1 * (x0 * x0)
 
         ts = []
         if abs(A) < 1e-12:
@@ -108,8 +116,10 @@ class ParabolicMirror:
         if t_best is None or p_best is None:
             return None
 
-        # Normal from grad(y^2 - 4 f x)
-        n_l = Vec2(-4 * self.f, 2 * p_best.y).normalized()
+        # Normal from grad(F) = (dF/dx, dF/dy)
+        # dF/dx = -2R + 2(1+kappa)x
+        # dF/dy = 2y
+        n_l = Vec2((-2.0 * R) + (2.0 * k1 * p_best.x), 2.0 * p_best.y).normalized()
         p_w = self.pose.local_to_world(p_best)
         n_w = self.pose.dir_local_to_world(n_l).normalized()
         return Hit(t=t_best, p_world=p_w, n_world=n_w, element_id=self.id, element_type="mirror")

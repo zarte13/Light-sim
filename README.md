@@ -4,7 +4,7 @@ Local Python web app (FastAPI + HTML canvas) to simulate 2D light rays with:
 
 * Click-to-place point light sources (emit rays in all directions)
 * Movable/rotatable thin-lens-equivalent Fresnel lenses
-* Movable/rotatable parabolic mirrors
+* Movable/rotatable **conic** mirrors (parabola/sphere/ellipse/hyperbola via kappa)
 * Sliders + numeric inputs for parameters
 * Import/export of scene JSON and analysis (focus point + spot metrics)
 
@@ -32,5 +32,5 @@ python -m uvicorn app.main:app --reload
 
 * Units: meters internally (UI can display mm/cm).
 * Fresnel lens is modeled as an equivalent thin lens (paraxial) via `m2 = m - y/f`.
-* Parabolic mirror is modeled as a true parabola segment in its local frame.
+* Conic mirror is modeled as a true conic segment in its local frame using `R` (vertex radius of curvature) and conic constant `kappa`.
 

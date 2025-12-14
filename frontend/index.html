@@ -13,7 +13,7 @@
           <button id="toolSelect" data-tool="select">Select/Move</button>
           <button id="toolSource" data-tool="add_source">Add Source</button>
           <button id="addLens">Add Fresnel</button>
-          <button id="addMirror">Add Parabolic Mirror</button>
+          <button id="addMirror">Add Conic Mirror</button>
         </div>
         <div class="group">
           <button id="btnSim">Simulate</button>
@@ -54,8 +54,9 @@
               <label class="field">aperture (m) <input id="lensA" type="number" step="0.001" min="0.001" /></label>
             </div>
             <div id="paramsMirror" style="display:none;">
-              <h4>Parabolic mirror</h4>
-              <label class="field">f (m) <input id="mirF" type="number" step="0.001" min="0.001" /></label>
+              <h4>Conic mirror</h4>
+              <label class="field">R (m) <input id="mirR" type="number" step="0.001" min="0.001" /></label>
+              <label class="field">kappa <input id="mirK" type="number" step="0.01" /></label>
               <label class="field">aperture (m) <input id="mirA" type="number" step="0.001" min="0.001" /></label>
             </div>
             <div class="group">

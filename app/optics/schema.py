@@ -27,12 +27,16 @@ class FresnelLensModel(BaseModel):
     aperture: float = Field(default=0.2, gt=0.0, description="Full aperture height (m)")
 
 
-class ParabolicMirrorModel(BaseModel):
+class ConicMirrorModel(BaseModel):
     id: str
-    type: Literal["parabola"] = "parabola"
+    type: Literal["conic"] = "conic"
     pos: Vec2Model
     theta: float = 0.0
-    f: float = Field(..., gt=0.0, description="Focal length (m)")
+    R: float = Field(..., gt=0.0, description="Radius of curvature at the vertex (m)")
+    kappa: float = Field(
+        default=-1.0,
+        description="Conic constant (kappa). -1=parabola, 0=sphere, <-1=hyperbola, -1..0=ellipse.",
+    )
     aperture: float = Field(default=0.5, gt=0.0, description="Full aperture height (m)")
 
 
@@ -51,6 +55,6 @@ class SettingsModel(BaseModel):
 class Scene(BaseModel):
     sources: List[SourceModel] = Field(default_factory=list)
     lenses: List[FresnelLensModel] = Field(default_factory=list)
-    mirrors: List[ParabolicMirrorModel] = Field(default_factory=list)
+    mirrors: List[ConicMirrorModel] = Field(default_factory=list)
     settings: SettingsModel = Field(default_factory=SettingsModel)
 

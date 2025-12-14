@@ -15,11 +15,54 @@ let rays = [];
 let analysis = null;
 
 // View transform (world meters -> screen pixels)
+// We render in CSS pixels; the backing store uses devicePixelRatio.
+let canvasCss = { w: 1200, h: 700 };
+let dpr = Math.max(1, window.devicePixelRatio || 1);
+
 let view = {
-  scale: 220, // px per meter
+  scale: 220, // CSS px per meter
   offsetX: 80,
-  offsetY: canvas.height / 2,
+  offsetY: canvasCss.h / 2,
 };
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const wCss = Math.max(300, Math.floor(rect.width));
+  const hCss = Math.max(300, Math.floor(rect.height));
+  canvasCss = { w: wCss, h: hCss };
+
+  dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = Math.floor(wCss * dpr);
+  const h = Math.floor(hCss * dpr);
+
+  // Keep backing store in sync with CSS size; otherwise the browser will stretch the bitmap.
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+
+  // Draw in CSS pixels.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  if (!Number.isFinite(view.offsetY)) view.offsetY = canvasCss.h / 2;
+}
+
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  // keep y center pinned on resize
+  view.offsetY = canvasCss.h / 2;
+  draw();
+});
+
+resizeCanvas();
+
+function eventToCanvasXY(ev) {
+  const rect = canvas.getBoundingClientRect();
+  // Return CSS pixel coordinates (matches our rendering space)
+  const sx = ev.clientX - rect.left;
+  const sy = ev.clientY - rect.top;
+  return { sx, sy };
+}
 
 function worldToScreen(p) {
   return {
@@ -85,10 +128,12 @@ document.getElementById('addMirror').onclick = () => {
   const id = uid('mirror');
   scene.mirrors.push({
     id,
-    type: 'parabola',
+    type: 'conic',
     pos: { x: 1.2, y: 0 },
     theta: Math.PI,
-    f: 0.35,
+    // For kappa=-1 (parabola): R = 2f
+    R: 0.7,
+    kappa: -1.0,
     aperture: 0.6,
   });
   select({ type: 'mirror', id });
@@ -175,7 +220,8 @@ function refreshSelectionUI() {
     document.getElementById('lensA').value = obj.aperture;
   }
   if (selected.type === 'mirror') {
-    document.getElementById('mirF').value = obj.f;
+    document.getElementById('mirR').value = obj.R;
+    document.getElementById('mirK').value = obj.kappa ?? -1;
     document.getElementById('mirA').value = obj.aperture;
   }
 }
@@ -194,7 +240,8 @@ hookField('posY', (o, v) => (o.pos.y = v));
 hookField('theta', (o, v) => (o.theta = v));
 hookField('lensF', (o, v) => (o.f = v));
 hookField('lensA', (o, v) => (o.aperture = v));
-hookField('mirF', (o, v) => (o.f = v));
+hookField('mirR', (o, v) => (o.R = v));
+hookField('mirK', (o, v) => (o.kappa = v));
 hookField('mirA', (o, v) => (o.aperture = v));
 
 document.getElementById('btnDelete').onclick = () => {
@@ -231,9 +278,8 @@ function hitTest(world) {
 }
 
 canvas.addEventListener('mousedown', (ev) => {
-  const rect = canvas.getBoundingClientRect();
-  const sx = ev.clientX - rect.left;
-  const sy = ev.clientY - rect.top;
+  resizeCanvas();
+  const { sx, sy } = eventToCanvasXY(ev);
   const w = screenToWorld(sx, sy);
 
   if (ev.button === 2) {
@@ -270,10 +316,9 @@ canvas.addEventListener('mousedown', (ev) => {
 });
 
 canvas.addEventListener('mousemove', (ev) => {
+  resizeCanvas();
   if (!dragging) return;
-  const rect = canvas.getBoundingClientRect();
-  const sx = ev.clientX - rect.left;
-  const sy = ev.clientY - rect.top;
+  const { sx, sy } = eventToCanvasXY(ev);
   const w = screenToWorld(sx, sy);
 
   if (dragMode === 'pan') {
@@ -302,18 +347,16 @@ canvas.addEventListener('mouseleave', () => {
 });
 
 canvas.addEventListener('wheel', (ev) => {
+  resizeCanvas();
   ev.preventDefault();
   const delta = Math.sign(ev.deltaY);
   const factor = delta > 0 ? 0.9 : 1.1;
-  const rect = canvas.getBoundingClientRect();
-  const sx = ev.clientX - rect.left;
-  const sy = ev.clientY - rect.top;
+  const { sx, sy } = eventToCanvasXY(ev);
   const before = screenToWorld(sx, sy);
   view.scale *= factor;
-  const after = screenToWorld(sx, sy);
-  // keep cursor point fixed
-  view.offsetX += (after.x - before.x) * view.scale;
-  view.offsetY -= (after.y - before.y) * view.scale;
+  // keep cursor world point fixed
+  view.offsetX = sx - before.x * view.scale;
+  view.offsetY = sy + before.y * view.scale;
   draw();
 });
 
@@ -326,8 +369,8 @@ function drawGrid() {
   ctx.strokeStyle = 'rgba(255,255,255,0.07)';
   ctx.lineWidth = 1;
   const step = 0.1; // m
-  const w0 = screenToWorld(0, canvas.height);
-  const w1 = screenToWorld(canvas.width, 0);
+  const w0 = screenToWorld(0, canvasCss.h);
+  const w1 = screenToWorld(canvasCss.w, 0);
   const xMin = Math.floor(w0.x / step) * step;
   const xMax = Math.ceil(w1.x / step) * step;
   const yMin = Math.floor(w0.y / step) * step;
@@ -411,7 +454,21 @@ function drawLens(l) {
 }
 
 function drawMirror(m) {
-  // draw sample points of parabola in local coords: y^2 = 4 f x
+  function sagConic(y, R, kappa) {
+    // Conic sag in 2D cross-section.
+    // Implicit: y^2 - 2R x + (1+kappa) x^2 = 0 (vertex at origin, opens +x)
+    const k1 = 1 + kappa;
+    if (Math.abs(k1) < 1e-12) {
+      // Parabola: y^2 = 2R x
+      return (y * y) / (2 * R);
+    }
+    const disc = R * R - k1 * y * y;
+    const s = Math.sqrt(Math.max(0, disc));
+    // Pick the near-vertex branch.
+    return (R - s) / k1;
+  }
+
+  // draw sample points of the conic in local coords
   const c = worldToScreen(m.pos);
   ctx.save();
   ctx.translate(c.x, c.y);
@@ -423,7 +480,7 @@ function drawMirror(m) {
   const steps = 80;
   for (let i = 0; i <= steps; i++) {
     const y = -r + (2 * r * i) / steps;
-    const x = (y * y) / (4 * m.f);
+    const x = sagConic(y, m.R, m.kappa ?? -1);
     const sx = x * view.scale;
     const sy = -y * view.scale;
     if (i === 0) ctx.moveTo(sx, sy);
@@ -459,7 +516,8 @@ function drawSelection() {
 }
 
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  resizeCanvas();
+  ctx.clearRect(0, 0, canvasCss.w, canvasCss.h);
   drawGrid();
   drawRays();
   for (const l of scene.lenses) drawLens(l);
@@ -472,4 +530,11 @@ function draw() {
 // initial
 refreshSelectionUI();
 draw();
+
+// When layout changes (e.g. analysis panel updates), the canvas CSS size can change without a window resize.
+// Observe size changes and keep backing store in sync to prevent stretching.
+new ResizeObserver(() => {
+  resizeCanvas();
+  draw();
+}).observe(canvas);
 
