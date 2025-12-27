@@ -165,7 +165,7 @@ document.getElementById('btnSim').onclick = async () => {
   const data = await res.json();
   rays = data.rays || [];
   analysis = data.analysis || null;
-  document.getElementById('analysis').textContent = JSON.stringify(analysis, null, 2);
+  renderAnalysis(analysis);
   draw();
 };
 
@@ -185,7 +185,7 @@ document.getElementById('fileImport').addEventListener('change', async (ev) => {
   if (obj.scene) {
     Object.assign(scene, obj.scene);
     analysis = obj.analysis || null;
-    document.getElementById('analysis').textContent = analysis ? JSON.stringify(analysis, null, 2) : '';
+    renderAnalysis(analysis);
     selected = null;
     rays = [];
     refreshSelectionUI();
@@ -311,7 +311,7 @@ document.getElementById('btnDelete').onclick = () => {
   selected = null;
   rays = [];
   analysis = null;
-  document.getElementById('analysis').textContent = '';
+  renderAnalysis(null);
   refreshSelectionUI();
   draw();
 };
@@ -628,6 +628,112 @@ function drawSelection() {
   ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
+}
+
+function renderAnalysis(analysis) {
+  const container = document.getElementById('analysis');
+  if (!analysis) {
+    container.innerHTML = '<div class="muted">Run simulation to see analysis</div>';
+    return;
+  }
+
+  let html = '';
+
+  // Ray count section
+  if (analysis.ray_count !== undefined) {
+    html += `
+      <div class="analysis-section">
+        <h4>Ray Count</h4>
+        <table class="analysis-table">
+          <tr>
+            <th data-tooltip="Total number of rays traced in the simulation">Rays</th>
+            <td class="analysis-value">${analysis.ray_count}</td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  // Focus section
+  if (analysis.focus) {
+    const [fx, fy] = analysis.focus;
+    html += `
+      <div class="analysis-section">
+        <h4>Focus Point</h4>
+        <table class="analysis-table">
+          <tr>
+            <th data-tooltip="X coordinate of the focal point">X</th>
+            <td class="analysis-value">${fx.toFixed(2)}<span class="analysis-unit">m</span></td>
+          </tr>
+          <tr>
+            <th data-tooltip="Y coordinate of the focal point">Y</th>
+            <td class="analysis-value">${fy.toFixed(2)}<span class="analysis-unit">m</span></td>
+          </tr>
+    `;
+    if (analysis.spot_rms !== null) {
+      html += `
+          <tr>
+            <th data-tooltip="Root mean square distance of rays from focus point">Spot RMS</th>
+            <td class="analysis-value">${analysis.spot_rms.toFixed(2)}<span class="analysis-unit">m</span></td>
+          </tr>
+      `;
+    }
+    html += '</table></div>';
+  }
+
+  // Intensity profile section (if available, simplified)
+  if (analysis.profile && analysis.profile.peak) {
+    html += `
+      <div class="analysis-section">
+        <h4>Intensity Peak</h4>
+        <table class="analysis-table">
+          <tr>
+            <th data-tooltip="Y position of the peak intensity">Y</th>
+            <td class="analysis-value">${analysis.profile.peak.y.toFixed(2)}<span class="analysis-unit">m</span></td>
+          </tr>
+          <tr>
+            <th data-tooltip="Number of rays at peak intensity">Peak Count</th>
+            <td class="analysis-value">${analysis.profile.peak.count}</td>
+          </tr>
+          <tr>
+            <th data-tooltip="Total rays sampled in profile">Samples</th>
+            <td class="analysis-value">${analysis.profile.samples}</td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  // Sensors section
+  if (analysis.sensors) {
+    const sensorIds = Object.keys(analysis.sensors);
+    if (sensorIds.length > 0) {
+      html += `
+        <div class="analysis-section">
+          <h4 data-tooltip="Sensors detect rays passing through them without blocking light">Sensors</h4>
+          <table class="analysis-table">
+            <tr>
+              <th>Sensor</th>
+              <th data-tooltip="Number of rays that passed through this sensor">Rays</th>
+              <th data-tooltip="Percentage of total emitted rays that hit this sensor">%</th>
+            </tr>
+      `;
+      for (const sId of sensorIds) {
+        const sData = analysis.sensors[sId];
+        const isHit = sData.ray_count > 0;
+        html += `
+            <tr>
+              <td class="${isHit ? 'sensor-hit' : 'sensor-no-hit'}">${sId.substring(0, 12)}...</td>
+              <td class="analysis-value ${isHit ? 'sensor-hit' : ''}">${sData.ray_count}</td>
+              <td class="analysis-value ${isHit ? 'sensor-hit' : ''}">${sData.percentage.toFixed(1)}<span class="analysis-unit">%</span></td>
+            </tr>
+        `;
+      }
+      html += '</table></div>';
+    }
+  }
+
+  container.innerHTML = html;
 }
 
 function draw() {
