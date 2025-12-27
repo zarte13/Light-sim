@@ -46,6 +46,14 @@ class ConicMirrorModel(BaseModel):
     aperture: float = Field(default=0.5, gt=0.0, description="Full aperture height (m)")
 
 
+class SensorModel(BaseModel):
+    id: str
+    type: Literal["line"] = "line"
+    pos: Vec2Model
+    theta: float = 0.0
+    length: float = Field(default=0.3, gt=0.0, description="Sensor length (m)")
+
+
 class SettingsModel(BaseModel):
     max_bounces: int = Field(default=6, ge=0, le=50)
     max_distance: float = Field(default=5.0, gt=0.0)
@@ -62,5 +70,6 @@ class Scene(BaseModel):
     sources: List[SourceModel] = Field(default_factory=list)
     lenses: List[FresnelLensModel] = Field(default_factory=list)
     mirrors: List[ConicMirrorModel] = Field(default_factory=list)
+    sensors: List[SensorModel] = Field(default_factory=list)
     settings: SettingsModel = Field(default_factory=SettingsModel)
 

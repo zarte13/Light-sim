@@ -208,3 +208,48 @@ class ConicMirror:
         n = n_world.normalized()
         return (d - n * (2.0 * d.dot(n))).normalized()
 
+
+@dataclass(frozen=True)
+class Sensor:
+    """A line segment sensor that detects ray intersections without affecting ray direction."""
+
+    id: str
+    pose: Pose2
+    length: float  # full length of the sensor line
+
+    def intersect(self, ro: Vec2, rd: Vec2) -> Optional[Hit]:
+        """Intersect ray with the sensor line segment.
+
+        Sensor is a line segment centered at pose.pos, extending perpendicular
+        to the pose direction by length/2 in each direction.
+        """
+        # Sensor line in local coords: from (-length/2, 0) to (length/2, 0)
+        # Ray in local coords
+        ro_l = self.pose.world_to_local(ro)
+        rd_l = self.pose.dir_world_to_local(rd).normalized()
+
+        # Ray equation: p = ro_l + t * rd_l
+        # Line segment: x = 0, y ∈ [-length/2, length/2]
+        # We need to find intersection with the line x = 0
+
+        if abs(rd_l.x) < 1e-12:
+            # Ray is parallel to the sensor line
+            return None
+
+        t = -ro_l.x / rd_l.x
+        if t <= 1e-9:
+            # Intersection behind ray origin
+            return None
+
+        p_l = Vec2(ro_l.x + t * rd_l.x, ro_l.y + t * rd_l.y)
+
+        # Check if intersection point is within sensor length
+        half_len = self.length / 2
+        if abs(p_l.y) > half_len:
+            return None
+
+        p_w = self.pose.local_to_world(p_l)
+        # Normal points in +x direction (sensor plane normal)
+        n_w = self.pose.dir_local_to_world(Vec2(1.0, 0.0)).normalized()
+        return Hit(t=t, p_world=p_w, n_world=n_w, element_id=self.id, element_type="sensor")
+

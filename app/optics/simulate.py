@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from app.optics.analysis import RayLine, best_focus_scan, estimate_focus, intensity_profile_at_x
-from app.optics.elements import ConicMirror, FresnelFacetLens, FresnelThinLens
+from app.optics.elements import ConicMirror, FresnelFacetLens, FresnelThinLens, Sensor
 from app.optics.schema import Scene
 from app.optics.transform import Pose2
 from app.optics.vec2 import Vec2
@@ -49,6 +49,14 @@ def simulate_scene(scene: Scene) -> Dict:
         )
         for m in scene.mirrors
     ]
+    sensors = [
+        Sensor(
+            id=s.id,
+            pose=Pose2(pos=_vec(s.pos), theta=float(s.theta)),
+            length=float(s.length),
+        )
+        for s in scene.sensors
+    ]
 
     max_bounces = int(scene.settings.max_bounces)
     max_dist = float(scene.settings.max_distance)
@@ -57,12 +65,15 @@ def simulate_scene(scene: Scene) -> Dict:
 
     rays_out: List[Dict] = []
     outgoing_lines: List[RayLine] = []
+    sensor_hits: Dict[str, int] = {s.id: 0 for s in sensors}
+    total_rays = 0
 
     for s in scene.sources:
         if s.ray_count <= 0:
             continue
 
         n = int(s.ray_count)
+        total_rays += n
         src_pos = _vec(s.pos)
 
         if s.type == "collimated":
@@ -78,7 +89,7 @@ def simulate_scene(scene: Scene) -> Dict:
                 if angular_jitter > 0:
                     ang += float(rng.uniform(-angular_jitter, angular_jitter))
                 rd = Vec2(math.cos(ang), math.sin(ang)).normalized()
-                poly = _trace_one(origin, rd, lenses, mirrors, max_bounces, max_dist)
+                poly = _trace_one(origin, rd, lenses, mirrors, sensors, sensor_hits, max_bounces, max_dist)
                 rays_out.append({"points": [[p.x, p.y] for p in poly]})
                 if len(poly) >= 2:
                     p0 = poly[-2]
@@ -93,7 +104,7 @@ def simulate_scene(scene: Scene) -> Dict:
                 if angular_jitter > 0:
                     ang += float(rng.uniform(-angular_jitter, angular_jitter))
                 rd = Vec2(math.cos(ang), math.sin(ang)).normalized()
-                poly = _trace_one(origin, rd, lenses, mirrors, max_bounces, max_dist)
+                poly = _trace_one(origin, rd, lenses, mirrors, sensors, sensor_hits, max_bounces, max_dist)
                 rays_out.append({"points": [[p.x, p.y] for p in poly]})
 
                 if len(poly) >= 2:
@@ -121,6 +132,7 @@ def simulate_scene(scene: Scene) -> Dict:
             "spot_rms": None,
             "ray_count": len(outgoing_lines),
             "profile": None,
+            "sensors": None,
         }
     else:
         fp, rms = focus
@@ -130,7 +142,19 @@ def simulate_scene(scene: Scene) -> Dict:
             "spot_rms": rms,
             "ray_count": len(outgoing_lines),
             "profile": profile,
+            "sensors": None,
         }
+
+    # Add sensor analysis if any sensors exist
+    if sensors:
+        sensor_analysis = {}
+        for s_id, hit_count in sensor_hits.items():
+            percentage = (hit_count / total_rays * 100) if total_rays > 0 else 0.0
+            sensor_analysis[s_id] = {
+                "ray_count": hit_count,
+                "percentage": round(percentage, 2),
+            }
+        analysis["sensors"] = sensor_analysis
 
     return {"rays": rays_out, "analysis": analysis}
 
@@ -140,6 +164,8 @@ def _trace_one(
     rd: Vec2,
     lenses: List[object],
     mirrors: List[ConicMirror],
+    sensors: List[Sensor],
+    sensor_hits: Dict[str, int],
     max_bounces: int,
     max_dist: float,
 ) -> List[Vec2]:
@@ -164,6 +190,18 @@ def _trace_one(
             if hit_best is None or h.t < hit_best[2].t:
                 hit_best = ("mirror", mr, h)
 
+        # Check sensors (they don't affect ray direction, just count hits)
+        for sn in sensors:
+            h = sn.intersect(o, d)
+            if h is None:
+                continue
+            # Record sensor hit
+            if h.element_id in sensor_hits:
+                sensor_hits[h.element_id] += 1
+            # Continue checking for other elements
+            if hit_best is None or h.t < hit_best[2].t:
+                hit_best = ("sensor", sn, h)
+
         if hit_best is None:
             pts.append(o + d * max_dist)
             break
@@ -173,8 +211,11 @@ def _trace_one(
 
         if kind == "lens":
             d2 = elem.transmit(h.p_world, d)
-        else:
+        elif kind == "mirror":
             d2 = elem.reflect(d, h.n_world)
+        else:
+            # Sensor: ray continues straight through
+            d2 = d
 
         # Offset origin to avoid self-intersection (along the *new* direction).
         d = d2

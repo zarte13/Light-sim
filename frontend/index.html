@@ -15,6 +15,7 @@
           <button id="toolCollimated" data-tool="add_collimated">Add Collimated</button>
           <button id="addLens">Add Fresnel</button>
           <button id="addMirror">Add Conic Mirror</button>
+          <button id="addSensor">Add Sensor</button>
         </div>
         <div class="group">
           <button id="btnSim">Simulate</button>
@@ -81,6 +82,11 @@
               <label class="field">R (m) <input id="mirR" type="number" step="0.001" min="0.001" /></label>
               <label class="field">kappa <input id="mirK" type="number" step="0.01" /></label>
               <label class="field">aperture (m) <input id="mirA" type="number" step="0.001" min="0.001" /></label>
+            </div>
+            <div id="paramsSensor" style="display:none;">
+              <h4>Sensor (line)</h4>
+              <label class="field">length (m) <input id="sensorLength" type="number" step="0.001" min="0.001" /></label>
+              <div class="muted">Sensor counts rays passing through it.</div>
             </div>
             <div class="group">
               <button id="btnDelete">Delete</button>

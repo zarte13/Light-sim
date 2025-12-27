@@ -6,6 +6,7 @@ const scene = {
   sources: [],
   lenses: [],
   mirrors: [],
+  sensors: [],
   settings: { max_bounces: 6, max_distance: 5.0, seed: null },
 };
 
@@ -142,6 +143,18 @@ document.getElementById('addMirror').onclick = () => {
   select({ type: 'mirror', id });
   draw();
 };
+document.getElementById('addSensor').onclick = () => {
+  const id = uid('sensor');
+  scene.sensors.push({
+    id,
+    type: 'line',
+    pos: { x: 0.5, y: 0 },
+    theta: 0,
+    length: 0.3,
+  });
+  select({ type: 'sensor', id });
+  draw();
+};
 
 document.getElementById('btnSim').onclick = async () => {
   const res = await fetch('/api/simulate', {
@@ -186,6 +199,7 @@ function findSelected() {
   if (selected.type === 'source') return scene.sources.find((s) => s.id === selected.id) || null;
   if (selected.type === 'lens') return scene.lenses.find((l) => l.id === selected.id) || null;
   if (selected.type === 'mirror') return scene.mirrors.find((m) => m.id === selected.id) || null;
+  if (selected.type === 'sensor') return scene.sensors.find((s) => s.id === selected.id) || null;
   return null;
 }
 
@@ -219,6 +233,7 @@ function refreshSelectionUI() {
   paramsSource.style.display = selected.type === 'source' ? 'block' : 'none';
   paramsLens.style.display = selected.type === 'lens' ? 'block' : 'none';
   paramsMirror.style.display = selected.type === 'mirror' ? 'block' : 'none';
+  paramsSensor.style.display = selected.type === 'sensor' ? 'block' : 'none';
 
   if (selected.type === 'source') {
     document.getElementById('srcKind').value = obj.type ?? 'point';
@@ -239,6 +254,9 @@ function refreshSelectionUI() {
     document.getElementById('mirR').value = obj.R;
     document.getElementById('mirK').value = obj.kappa ?? -1;
     document.getElementById('mirA').value = obj.aperture;
+  }
+  if (selected.type === 'sensor') {
+    document.getElementById('sensorLength').value = obj.length ?? 0.3;
   }
 }
 
@@ -282,12 +300,14 @@ hookField('lensN2', (o, v) => (o.n2 = v));
 hookField('mirR', (o, v) => (o.R = v));
 hookField('mirK', (o, v) => (o.kappa = v));
 hookField('mirA', (o, v) => (o.aperture = v));
+hookField('sensorLength', (o, v) => (o.length = v));
 
 document.getElementById('btnDelete').onclick = () => {
   if (!selected) return;
   if (selected.type === 'source') scene.sources = scene.sources.filter((s) => s.id !== selected.id);
   if (selected.type === 'lens') scene.lenses = scene.lenses.filter((l) => l.id !== selected.id);
   if (selected.type === 'mirror') scene.mirrors = scene.mirrors.filter((m) => m.id !== selected.id);
+  if (selected.type === 'sensor') scene.sensors = scene.sensors.filter((s) => s.id !== selected.id);
   selected = null;
   rays = [];
   analysis = null;
@@ -313,6 +333,7 @@ function hitTest(world) {
   for (const s of scene.sources) if (near(s.pos)) return { type: 'source', id: s.id };
   for (const l of scene.lenses) if (near(l.pos)) return { type: 'lens', id: l.id };
   for (const m of scene.mirrors) if (near(m.pos)) return { type: 'mirror', id: m.id };
+  for (const s of scene.sensors) if (near(s.pos)) return { type: 'sensor', id: s.id };
   return null;
 }
 
@@ -548,6 +569,43 @@ function drawMirror(m) {
   drawElementDot(m.pos, 'rgba(220,220,220,0.9)', 4);
 }
 
+function drawSensor(s) {
+  const c = worldToScreen(s.pos);
+  const halfLen = (s.length / 2) * view.scale;
+
+  // Check if this sensor was hit by rays
+  const isHit = analysis && analysis.sensors && analysis.sensors[s.id] && analysis.sensors[s.id].ray_count > 0;
+
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.rotate(-s.theta);
+
+  // Glow effect if hit
+  if (isHit) {
+    ctx.shadowColor = 'rgba(0, 255, 100, 0.8)';
+    ctx.shadowBlur = 10;
+  }
+
+  // Draw the sensor line
+  ctx.strokeStyle = isHit ? 'rgba(0, 255, 100, 0.95)' : 'rgba(180, 180, 180, 0.9)';
+  ctx.lineWidth = isHit ? 4 : 3;
+  ctx.beginPath();
+  ctx.moveTo(0, -halfLen);
+  ctx.lineTo(0, halfLen);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // Draw center dot
+  drawElementDot(s.pos, isHit ? 'rgba(0, 255, 100, 0.9)' : 'rgba(180,180,180,0.9)', 4);
+}
+
+function drawSensors() {
+  for (const s of scene.sensors) {
+    drawSensor(s);
+  }
+}
+
 function drawSources() {
   for (const s of scene.sources) {
     drawElementDot(s.pos, 'rgba(255,140,0,0.95)', 5);
@@ -579,6 +637,7 @@ function draw() {
   drawRays();
   for (const l of scene.lenses) drawLens(l);
   for (const m of scene.mirrors) drawMirror(m);
+  drawSensors();
   drawSources();
   drawFocus();
   drawSelection();
