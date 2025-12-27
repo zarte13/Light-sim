@@ -26,6 +26,7 @@ python -m venv .venv
 .venv\\Scripts\\activate
 pip install -r requirements.txt
 ```
+Si vous utiliser powershell, voici la commande pour activé les scripts powershell: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 2. Start server:
 
