@@ -6,9 +6,16 @@ Local Python web app (FastAPI + HTML canvas) to simulate 2D light rays with:
 * Collimated beam sources (parallel rays)
 * Movable/rotatable thin-lens-equivalent Fresnel lenses
 * Optional Snell/facet Fresnel lens mode (indices `n1`, `n2`)
-* Movable/rotatable **conic** mirrors (parabola/sphere/ellipse/hyperbola via kappa)
+* Movable/rotatable conic mirrors (parabola/sphere/ellipse/hyperbola via kappa)
 * Sliders + numeric inputs for parameters
 * Import/export of scene JSON and analysis (focus point + spot metrics)
+
+## Clone
+
+```bash
+git clone https://github.com/zarte13/Light-sim.git
+cd Light-sim
+```
 
 ## Run
 

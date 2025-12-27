@@ -67,9 +67,9 @@ class SettingsModel(BaseModel):
 
 
 class Scene(BaseModel):
+    sensors: List[SensorModel] = Field(default_factory=list)
     sources: List[SourceModel] = Field(default_factory=list)
     lenses: List[FresnelLensModel] = Field(default_factory=list)
     mirrors: List[ConicMirrorModel] = Field(default_factory=list)
-    sensors: List[SensorModel] = Field(default_factory=list)
     settings: SettingsModel = Field(default_factory=SettingsModel)
 

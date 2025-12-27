@@ -23,6 +23,9 @@ Browser (canvas editor)
 
 Scene JSON contains:
 
+* `sensors[]`: Line segment sensors that detect ray intersections
+  * `type="line"`: Line segment at `pos` with rotation `theta` and full `length` (meters)
+  * Sensors let all rays pass through (non-blocking) and count intersections
 * `sources[]`:
   * `type="point"`: point source at `pos` emitting rays in all directions
   * `type="collimated"`: collimated beam with center `pos`, direction `theta` (radians), and full beam `width`
@@ -93,10 +96,18 @@ We report:
 * `spot_rms` (meters): RMS perpendicular distance of rays to the focus point
 * optional `profile`: histogram along a user-defined detector (future enhancement)
 
+### Sensor measurements
+
+Sensors are line segments that detect ray intersections without affecting ray direction. For each sensor, we report:
+
+* `ray_count`: Number of rays that passed through the sensor
+* `percentage`: Percentage of total emitted rays that hit the sensor
+
+Sensors glow green in the visualization when hit by rays.
+
 ## Endpoints
 
 * `GET /` serves the frontend.
 * `POST /api/simulate` takes a scene JSON and returns:
-  * polyline segments for each ray
-  * analysis: focus point + spot RMS
-
+  * `rays`: polyline segments for each ray
+  * `analysis`: focus point, spot RMS, intensity profile, and sensor measurements
